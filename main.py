@@ -6,6 +6,7 @@ Created on Mon Jul 25 16:00:42 2022
 """
 
 import logging
+import math
 import pickle
 import numpy as np
 import pandas as pd
@@ -172,16 +173,27 @@ def predict():
                           TOTAL_LOAN_COST]
     features_categorical = [BANKRUPTCY, FORECLOSURE_FLAG]
 
-    features_numerical = [float(feature) if feature else np.nan for feature in features_numerical]
+    try:
+        features_numerical = [float(feature) if feature else np.nan for feature in features_numerical]
+    except (TypeError, ValueError, OverflowError):
+        return jsonify({'error': 'Invalid numeric feature'}), 400
+    if any(math.isinf(value) for value in features_numerical):
+        return jsonify({'error': 'Infinite numeric feature'}), 400
+    if any(value not in (None, '', 'Y', 'N') for value in features_categorical):
+        return jsonify({'error': 'Invalid categorical feature'}), 400
     features_categorical = [feature or np.nan for feature in features_categorical]
     features = features_numerical + features_categorical
     features = np.array([features], dtype=object)
 
-    label = model.predict_proba(features)[0][1]
+    try:
+        label = float(model.predict_proba(features)[0][1])
+    except (ValueError, TypeError, OverflowError):
+        app.logger.exception('Model prediction rejected input')
+        return jsonify({'error': 'Prediction could not be completed'}), 422
 
     return jsonify({
         'PoA': label,
     })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='127.0.0.1', port=8080, debug=False)
